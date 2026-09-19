@@ -2,6 +2,10 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 
+/// <summary>
+/// Spawns a prefab on every detected image and hides it when the image
+/// is not actively tracked. AR Foundation 6 API (trackablesChanged).
+/// </summary>
 public class TrackedImages : MonoBehaviour
 {
     [SerializeField] ARTrackedImageManager m_TrackedImageManager;
@@ -12,16 +16,31 @@ public class TrackedImages : MonoBehaviour
         // Fallback if the reference was not assigned in the Inspector
         if (m_TrackedImageManager == null)
             m_TrackedImageManager = FindAnyObjectByType<ARTrackedImageManager>();
+
+        if (m_TrackedImageManager == null)
+        {
+            Debug.LogError("TrackedImages: no ARTrackedImageManager found in the scene.");
+            enabled = false;
+        }
     }
 
-    void OnEnable() => m_TrackedImageManager.trackablesChanged.AddListener(OnChanged);
-    void OnDisable() => m_TrackedImageManager.trackablesChanged.RemoveListener(OnChanged);
+    void OnEnable()
+    {
+        if (m_TrackedImageManager != null)
+            m_TrackedImageManager.trackablesChanged.AddListener(OnChanged);
+    }
+
+    void OnDisable()
+    {
+        if (m_TrackedImageManager != null)
+            m_TrackedImageManager.trackablesChanged.RemoveListener(OnChanged);
+    }
 
     void OnChanged(ARTrackablesChangedEventArgs<ARTrackedImage> eventArgs)
     {
         foreach (var newImage in eventArgs.added)
         {
-            Debug.Log($"Image added: {newImage.referenceImage.name}");
+            Debug.Log($"Image added: {GetImageName(newImage)}");
 
             if (prefabToSpawn == null) continue;
             var content = Instantiate(prefabToSpawn, newImage.transform); // child: follows the image
@@ -38,8 +57,17 @@ public class TrackedImages : MonoBehaviour
 
         foreach (var pair in eventArgs.removed)
         {
-            Debug.Log($"Image removed: {pair.Value.referenceImage.name}");
+            Debug.Log($"Image removed: {GetImageName(pair.Value)}");
             // Children are destroyed along with the ARTrackedImage GameObject
         }
+    }
+
+    // referenceImage.name is empty when the detected image does not match any
+    // entry in the Reference Image Library (e.g. a Simulated Tracked Image with no texture)
+    static string GetImageName(ARTrackedImage image)
+    {
+        return string.IsNullOrEmpty(image.referenceImage.name)
+            ? $"<unnamed, id {image.trackableId}>"
+            : image.referenceImage.name;
     }
 }
