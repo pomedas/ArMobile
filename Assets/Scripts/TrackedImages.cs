@@ -1,54 +1,45 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 
 public class TrackedImages : MonoBehaviour
 {
+    [SerializeField] ARTrackedImageManager m_TrackedImageManager;
+    [SerializeField] GameObject prefabToSpawn;
 
-    [SerializeField]
-    ARTrackedImageManager m_TrackedImageManager;
-    public GameObject prefabToSpawn; // Assign your content prefab in the Inspector
+    void Awake()
+    {
+        // Fallback if the reference was not assigned in the Inspector
+        if (m_TrackedImageManager == null)
+            m_TrackedImageManager = FindAnyObjectByType<ARTrackedImageManager>();
+    }
 
-    void OnEnable() => m_TrackedImageManager.trackedImagesChanged += OnChanged;
+    void OnEnable() => m_TrackedImageManager.trackablesChanged.AddListener(OnChanged);
+    void OnDisable() => m_TrackedImageManager.trackablesChanged.RemoveListener(OnChanged);
 
-    void OnDisable() => m_TrackedImageManager.trackedImagesChanged -= OnChanged;
-
-    void OnChanged(ARTrackedImagesChangedEventArgs eventArgs)
+    void OnChanged(ARTrackablesChangedEventArgs<ARTrackedImage> eventArgs)
     {
         foreach (var newImage in eventArgs.added)
         {
-            // Handle added event
-            Debug.Log("Imaged added " + newImage.referenceImage.name);
+            Debug.Log($"Image added: {newImage.referenceImage.name}");
 
-            GameObject newObject = Instantiate(prefabToSpawn, newImage.transform.position, newImage.transform.rotation);
-            newObject.transform.parent = newImage.transform; // Parent to the tracked image
+            if (prefabToSpawn == null) continue;
+            var content = Instantiate(prefabToSpawn, newImage.transform); // child: follows the image
+            content.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
         }
 
         foreach (var updatedImage in eventArgs.updated)
         {
-            // Handle updated event
-            Debug.Log("Imaged updated " + updatedImage.referenceImage.name);
+            // Hide content when the image is not actively tracked (Limited / None)
+            bool visible = updatedImage.trackingState == TrackingState.Tracking;
+            foreach (Transform child in updatedImage.transform)
+                child.gameObject.SetActive(visible);
         }
 
-        foreach (var removedImage in eventArgs.removed)
+        foreach (var pair in eventArgs.removed)
         {
-            // Handle removed event
-            Debug.Log("Imaged removed " + removedImage.referenceImage.name);
+            Debug.Log($"Image removed: {pair.Value.referenceImage.name}");
+            // Children are destroyed along with the ARTrackedImage GameObject
         }
-    }
-
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
     }
 }
